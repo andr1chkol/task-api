@@ -2,12 +2,11 @@ package com.andr1chkol.taskapi.controller;
 
 import com.andr1chkol.taskapi.model.Task;
 import com.andr1chkol.taskapi.service.TaskService;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Optional;
 
 @RestController
 public class TaskController {
@@ -20,6 +19,16 @@ public class TaskController {
     @GetMapping("/tasks")
     public List<Task> getAllTasks() {
         return service.getAllTasks();
+    }
+
+    @GetMapping("/tasks/{id}")
+    public ResponseEntity<Task> getTaskById(@PathVariable Long id) {
+        Optional<Task> task = service.getTaskById(id);
+        if (task.isPresent()) {
+            return ResponseEntity.ok(task.get());
+        }
+
+        return ResponseEntity.notFound().build();
     }
 
     @PostMapping("/tasks")

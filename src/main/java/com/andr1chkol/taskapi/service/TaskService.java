@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class TaskService {
@@ -22,6 +23,11 @@ public class TaskService {
 
     public List<Task> getAllTasks() {
         return tasks;
+    }
+
+    public Optional<Task> getTaskById(Long id) {
+
+        return tasks.stream().filter(task -> task.getId().equals(id)).findFirst();
     }
 
     public Task createTask(Task task) {
