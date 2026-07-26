@@ -1,6 +1,17 @@
 package com.andr1chkol.taskapi.model;
 
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+
 import java.time.LocalDateTime;
+
+@JsonPropertyOrder({
+        "id",
+        "title",
+        "description",
+        "status",
+        "createdAt",
+        "updatedAt"
+})
 
 public class Task {
     private Long id;
@@ -18,7 +29,8 @@ public class Task {
         this.updatedAt = this.createdAt;
     }
 
-    public Task(){}
+    public Task() {
+    }
 
     public Long getId() {
         return id;
