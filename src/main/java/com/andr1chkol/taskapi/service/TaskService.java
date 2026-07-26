@@ -1,5 +1,6 @@
 package com.andr1chkol.taskapi.service;
 
+import com.andr1chkol.taskapi.exception.TaskNotFoundException;
 import com.andr1chkol.taskapi.model.Task;
 import com.andr1chkol.taskapi.model.TaskStatus;
 import org.springframework.stereotype.Service;
@@ -7,7 +8,6 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -29,8 +29,12 @@ public class TaskService {
         return new ArrayList<>(tasks.values());
     }
 
-    public Optional<Task> getTaskById(Long id) {
-        return Optional.ofNullable(tasks.get(id));
+    public Task getTaskById(Long id) {
+        Task task = tasks.get(id);
+        if (task == null) {
+            throw new TaskNotFoundException(id);
+        }
+        return task;
     }
 
     public Task createTask(Task task) {
@@ -46,11 +50,11 @@ public class TaskService {
         return task;
     }
 
-    public Optional<Task> updateTask(Long id, Task newData) {
+    public Task updateTask(Long id, Task newData) {
         Task task = tasks.get(id);
 
         if (task == null) {
-            return Optional.empty();
+            throw new TaskNotFoundException(id);
         }
 
         task.setTitle(newData.getTitle());
@@ -59,23 +63,27 @@ public class TaskService {
         task.setUpdatedAt(LocalDateTime.now());
 
         tasks.put(id, task);
-        return Optional.of(task);
+        return task;
     }
 
-    public Optional<Task> updateTaskStatus(Long id, TaskStatus newStatus) {
+    public Task updateTaskStatus(Long id, TaskStatus newStatus) {
         Task task = tasks.get(id);
         if (task == null) {
-            return Optional.empty();
+            throw new TaskNotFoundException(id);
         }
 
         task.setStatus(newStatus);
         task.setUpdatedAt(LocalDateTime.now());
 
         tasks.put(id, task);
-        return Optional.of(task);
+        return task;
     }
 
-    public boolean deleteTaskById(Long id) {
-        return tasks.remove(id) != null;
+    public void deleteTaskById(Long id) {
+        Task removedTask = tasks.remove(id);
+
+        if (removedTask == null) {
+            throw new TaskNotFoundException(id);
+        }
     }
 }
