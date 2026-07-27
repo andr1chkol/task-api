@@ -1,5 +1,7 @@
 package com.andr1chkol.taskapi.service;
 
+import com.andr1chkol.taskapi.dto.CreateTaskRequest;
+import com.andr1chkol.taskapi.dto.UpdateTaskRequest;
 import com.andr1chkol.taskapi.exception.TaskNotFoundException;
 import com.andr1chkol.taskapi.model.Task;
 import com.andr1chkol.taskapi.model.TaskStatus;
@@ -37,8 +39,10 @@ public class TaskService {
         return task;
     }
 
-    public Task createTask(Task task) {
+    public Task createTask(CreateTaskRequest taskRequest) {
         Long id = idGenerator.incrementAndGet();
+        Task task = new Task(taskRequest.getTitle(), taskRequest.getDescription());
+
         task.setId(id);
         task.setStatus(TaskStatus.TODO);
 
@@ -50,16 +54,16 @@ public class TaskService {
         return task;
     }
 
-    public Task updateTask(Long id, Task newData) {
+    public Task updateTask(Long id, UpdateTaskRequest updateTaskRequest) {
         Task task = tasks.get(id);
 
         if (task == null) {
             throw new TaskNotFoundException(id);
         }
 
-        task.setTitle(newData.getTitle());
-        task.setDescription(newData.getDescription());
-        task.setStatus(newData.getStatus());
+        task.setTitle(updateTaskRequest.getTitle());
+        task.setDescription(updateTaskRequest.getDescription());
+        task.setStatus(updateTaskRequest.getStatus());
         task.setUpdatedAt(LocalDateTime.now());
 
         tasks.put(id, task);
