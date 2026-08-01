@@ -1,43 +1,46 @@
 package com.andr1chkol.taskapi.model;
 
-import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+import jakarta.persistence.*;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
-@JsonPropertyOrder({
-        "id",
-        "title",
-        "description",
-        "status",
-        "createdAt",
-        "updatedAt"
-})
 
+@Entity
+@Table(name = "tasks")
 public class Task {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Column(nullable = false, length = 100)
     private String title;
+
+    @Column(columnDefinition = "TEXT")
     private String description;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
     private TaskStatus status;
-    private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
+
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
 
     public Task(String title, String description) {
         this.title = title;
         this.description = description;
         this.status = TaskStatus.TODO;
-        this.createdAt = LocalDateTime.now();
+        this.createdAt = Instant.now();
         this.updatedAt = this.createdAt;
     }
 
-    public Task() {
+    protected Task() {
     }
 
     public Long getId() {
         return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
     }
 
     public String getTitle() {
@@ -64,19 +67,19 @@ public class Task {
         this.status = status;
     }
 
-    public LocalDateTime getCreatedAt() {
+    public Instant getCreatedAt() {
         return createdAt;
     }
 
-    public void setCreatedAt(LocalDateTime createdAt) {
+    public void setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
     }
 
-    public LocalDateTime getUpdatedAt() {
+    public Instant getUpdatedAt() {
         return updatedAt;
     }
 
-    public void setUpdatedAt(LocalDateTime updatedAt) {
+    public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
     }
 }

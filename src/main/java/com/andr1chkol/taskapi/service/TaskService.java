@@ -5,106 +5,83 @@ import com.andr1chkol.taskapi.dto.UpdateTaskRequest;
 import com.andr1chkol.taskapi.exception.TaskNotFoundException;
 import com.andr1chkol.taskapi.model.Task;
 import com.andr1chkol.taskapi.model.TaskStatus;
+import com.andr1chkol.taskapi.repository.TaskRepository;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
-import java.util.ArrayList;
+import java.time.Instant;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 
 
 @Service
+@Transactional(readOnly = true)
 public class TaskService {
     private static final Logger log = LoggerFactory.getLogger(TaskService.class);
-
-    private final Map<Long, Task> tasks = new ConcurrentHashMap<>();
-    private final AtomicLong idGenerator = new AtomicLong();
+    private final TaskRepository taskRepository;
     private final int maxTasks;
 
-    public TaskService(@Value("${task-api.max-tasks:100}") int maxTasks) {
+    public TaskService(@Value("${task-api.max-tasks:100}") int maxTasks, TaskRepository taskRepository) {
         this.maxTasks = maxTasks;
+        this.taskRepository = taskRepository;
+
         log.info("Task service initialized with maxTasks={}", maxTasks);
-
-        Task task = new Task("Learn Spring Boot", "Create TaskApi web");
-        long id = idGenerator.incrementAndGet();
-        task.setId(id);
-
-        tasks.put(id, task);
     }
 
     public List<Task> getAllTasks() {
-        log.debug("Getting all tasks, current count={}", tasks.size());
-        return new ArrayList<>(tasks.values());
+        List<Task> foundTasks = taskRepository.findAll();
+        log.debug("Getting all tasks, current count={}", foundTasks.size());
+        return foundTasks;
     }
 
     public Task getTaskById(Long id) {
         log.debug("Getting task with id={}", id);
-        Task task = tasks.get(id);
-        if (task == null) {
-            throw new TaskNotFoundException(id);
-        }
-        return task;
+        return taskRepository.findById(id)
+                .orElseThrow(() -> new TaskNotFoundException(id));
+
     }
 
+    @Transactional
     public Task createTask(CreateTaskRequest taskRequest) {
-        Long id = idGenerator.incrementAndGet();
         Task task = new Task(taskRequest.getTitle(), taskRequest.getDescription());
 
-        task.setId(id);
-        task.setStatus(TaskStatus.TODO);
-
-        LocalDateTime now = LocalDateTime.now();
-        task.setCreatedAt(now);
-        task.setUpdatedAt(now);
-
-        tasks.put(id, task);
-        log.info("Task created with id={}", id);
-        return task;
+        Task savedTask = taskRepository.save(task);
+        log.info("Task created with id={}", savedTask.getId());
+        return savedTask;
     }
 
+    @Transactional
     public Task updateTask(Long id, UpdateTaskRequest updateTaskRequest) {
-        Task task = tasks.get(id);
-
-        if (task == null) {
-            throw new TaskNotFoundException(id);
-        }
+        Task task = taskRepository.findById(id).orElseThrow(() -> new TaskNotFoundException(id));
 
         task.setTitle(updateTaskRequest.getTitle());
         task.setDescription(updateTaskRequest.getDescription());
         task.setStatus(updateTaskRequest.getStatus());
-        task.setUpdatedAt(LocalDateTime.now());
+        task.setUpdatedAt(Instant.now());
 
-        tasks.put(id, task);
         log.debug("Task updated with id={}", id);
         return task;
     }
 
+    @Transactional
     public Task updateTaskStatus(Long id, TaskStatus newStatus) {
-        Task task = tasks.get(id);
-        if (task == null) {
-            throw new TaskNotFoundException(id);
-        }
+        Task task = taskRepository.findById(id).orElseThrow(() -> new TaskNotFoundException(id));
 
         task.setStatus(newStatus);
-        task.setUpdatedAt(LocalDateTime.now());
+        task.setUpdatedAt(Instant.now());
 
-        tasks.put(id, task);
         log.debug("Task status updated with id={}, status={}", id, newStatus);
         return task;
     }
 
+    @Transactional
     public void deleteTaskById(Long id) {
-        Task removedTask = tasks.remove(id);
-
-        if (removedTask == null) {
-            throw new TaskNotFoundException(id);
-        }
+        Task task = taskRepository.findById(id).orElseThrow(() -> new TaskNotFoundException(id));
+        taskRepository.delete(task);
         log.info("Task deleted with id={}", id);
     }
 }

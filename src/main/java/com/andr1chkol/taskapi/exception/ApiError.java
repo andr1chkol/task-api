@@ -63,7 +63,7 @@ public class ApiError {
         return timestamp;
     }
 
-    public Map<String, String> getFieldErrors(){
+    public Map<String, String> getFieldErrors() {
         return fieldErrors;
     }
 }

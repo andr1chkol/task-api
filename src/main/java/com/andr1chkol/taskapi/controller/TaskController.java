@@ -6,7 +6,6 @@ import com.andr1chkol.taskapi.dto.UpdateTaskRequest;
 import com.andr1chkol.taskapi.dto.UpdateTaskStatusRequest;
 import com.andr1chkol.taskapi.model.Task;
 import com.andr1chkol.taskapi.service.TaskService;
-
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
