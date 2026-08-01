@@ -5,6 +5,10 @@ import com.andr1chkol.taskapi.dto.UpdateTaskRequest;
 import com.andr1chkol.taskapi.exception.TaskNotFoundException;
 import com.andr1chkol.taskapi.model.Task;
 import com.andr1chkol.taskapi.model.TaskStatus;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -14,12 +18,19 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
+
 @Service
 public class TaskService {
+    private static final Logger log = LoggerFactory.getLogger(TaskService.class);
+
     private final Map<Long, Task> tasks = new ConcurrentHashMap<>();
     private final AtomicLong idGenerator = new AtomicLong();
+    private final int maxTasks;
 
-    public TaskService() {
+    public TaskService(@Value("${task-api.max-tasks:100}") int maxTasks) {
+        this.maxTasks = maxTasks;
+        log.info("Task service initialized with maxTasks={}", maxTasks);
+
         Task task = new Task("Learn Spring Boot", "Create TaskApi web");
         long id = idGenerator.incrementAndGet();
         task.setId(id);
@@ -28,10 +39,12 @@ public class TaskService {
     }
 
     public List<Task> getAllTasks() {
+        log.debug("Getting all tasks, current count={}", tasks.size());
         return new ArrayList<>(tasks.values());
     }
 
     public Task getTaskById(Long id) {
+        log.debug("Getting task with id={}", id);
         Task task = tasks.get(id);
         if (task == null) {
             throw new TaskNotFoundException(id);
@@ -51,6 +64,7 @@ public class TaskService {
         task.setUpdatedAt(now);
 
         tasks.put(id, task);
+        log.info("Task created with id={}", id);
         return task;
     }
 
@@ -67,6 +81,7 @@ public class TaskService {
         task.setUpdatedAt(LocalDateTime.now());
 
         tasks.put(id, task);
+        log.debug("Task updated with id={}", id);
         return task;
     }
 
@@ -80,6 +95,7 @@ public class TaskService {
         task.setUpdatedAt(LocalDateTime.now());
 
         tasks.put(id, task);
+        log.debug("Task status updated with id={}, status={}", id, newStatus);
         return task;
     }
 
@@ -89,5 +105,6 @@ public class TaskService {
         if (removedTask == null) {
             throw new TaskNotFoundException(id);
         }
+        log.info("Task deleted with id={}", id);
     }
 }
