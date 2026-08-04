@@ -11,12 +11,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Page;
 
 import java.time.Instant;
-import java.util.List;
-
 
 @Service
 @Transactional(readOnly = true)
@@ -32,9 +34,16 @@ public class TaskService {
         log.info("Task service initialized with maxTasks={}", maxTasks);
     }
 
-    public List<Task> getAllTasks() {
-        List<Task> foundTasks = taskRepository.findAll();
-        log.debug("Getting all tasks, current count={}", foundTasks.size());
+    public Page<Task> getAllTasks(TaskStatus status, Sort.Direction direction, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, "createdAt"));
+        Page<Task> foundTasks;
+        if (status == null) {
+            foundTasks = taskRepository.findAll(pageable);
+        } else {
+            foundTasks = taskRepository.findByStatus(status, pageable);
+        }
+
+        log.debug("Getting tasks by status={}, current count={}", status, foundTasks.getNumberOfElements());
         return foundTasks;
     }
 

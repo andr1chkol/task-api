@@ -5,9 +5,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
+import org.springframework.validation.method.ParameterValidationResult;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.time.LocalDateTime;
@@ -71,6 +73,29 @@ public class GlobalExceptionHandler {
 
         for (FieldError fieldError : fieldErrorList) {
             fieldErrors.put(fieldError.getField(), fieldError.getDefaultMessage());
+        }
+
+        ApiError error = new ApiError(LocalDateTime.now(),
+                status.value(),
+                status.getReasonPhrase(),
+                "Validation failed",
+                request.getRequestURI(),
+                fieldErrors
+        );
+
+        return ResponseEntity.status(status).body(error);
+    }
+
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<ApiError> handleHandlerMethodValidation(HandlerMethodValidationException e, HttpServletRequest request) {
+        HttpStatus status = HttpStatus.BAD_REQUEST;
+        Map<String, String> fieldErrors = new LinkedHashMap<>();
+
+        for (ParameterValidationResult parameterValidationResult : e.getParameterValidationResults()) {
+            String parameterName = parameterValidationResult.getMethodParameter().getParameterName();
+            String message = parameterValidationResult.getResolvableErrors().get(0).getDefaultMessage();
+
+            fieldErrors.put(parameterName, message);
         }
 
         ApiError error = new ApiError(LocalDateTime.now(),
