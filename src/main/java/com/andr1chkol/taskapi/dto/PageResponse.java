@@ -19,8 +19,8 @@ public class PageResponse<T> {
         this.size = size;
         this.totalElements = totalElements;
         this.totalPages = totalPages;
-        this.last = last;
         this.first = first;
+        this.last = last;
     }
 
     public static <T> PageResponse<T> from(Page<T> page) {

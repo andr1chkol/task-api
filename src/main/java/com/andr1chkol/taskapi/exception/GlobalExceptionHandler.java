@@ -93,7 +93,7 @@ public class GlobalExceptionHandler {
 
         for (ParameterValidationResult parameterValidationResult : e.getParameterValidationResults()) {
             String parameterName = parameterValidationResult.getMethodParameter().getParameterName();
-            String message = parameterValidationResult.getResolvableErrors().get(0).getDefaultMessage();
+            String message = parameterValidationResult.getResolvableErrors().getFirst().getDefaultMessage();
 
             fieldErrors.put(parameterName, message);
         }
