@@ -2,14 +2,23 @@ package com.andr1chkol.taskapi.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import io.swagger.v3.oas.annotations.media.Schema;
 
-
+@Schema(description = "Data required to create a task")
 public class CreateTaskRequest {
 
+    @Schema(
+            description = "Task title",
+            example = "Learn Spring Boot"
+    )
     @NotBlank(message = "Title must not be blank")
     @Size(max = 100, message = "Title must not exceed 100 characters")
     private String title;
 
+    @Schema(
+            description = "Optional detailed task description",
+            example = "Test controller"
+    )
     @Size(max = 1000, message = "Description must not exceed 1000 characters")
     private String description;
 
