@@ -2,6 +2,7 @@ package com.andr1chkol.taskapi.repository;
 
 import com.andr1chkol.taskapi.model.Task;
 import com.andr1chkol.taskapi.model.TaskStatus;
+import com.andr1chkol.taskapi.model.User;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -34,8 +35,9 @@ class TaskRepositoryTest {
     private TestEntityManager entityManager;
 
     @Test
-    void saveAndFindById_whenTaskIsValid_returnsPersistedTask() {
-        Task task = new Task("Learn JUnit", "Test repository");
+    void findByIdAndOwner_whenTaskBelongsToOwner_returnsPersistedTask() {
+        User owner = persistUser("andrew@example.com");
+        Task task = createTask("Learn JUnit", "Test repository", owner);
 
         taskRepository.save(task);
         Long id = task.getId();
@@ -43,47 +45,94 @@ class TaskRepositoryTest {
         entityManager.flush();
         entityManager.clear();
 
-        Task foundTask = taskRepository.findById(id).orElseThrow();
+        Task foundTask = taskRepository.findByIdAndOwner(id, owner).orElseThrow();
 
         assertNotNull(id);
         assertEquals(task.getId(), foundTask.getId());
         assertEquals(task.getTitle(), foundTask.getTitle());
         assertEquals(task.getDescription(), foundTask.getDescription());
         assertEquals(task.getStatus(), foundTask.getStatus());
+        assertEquals(owner.getId(), foundTask.getOwner().getId());
         assertNotNull(foundTask.getCreatedAt());
         assertNotNull(foundTask.getUpdatedAt());
     }
 
     @Test
-    void findByStatus_whenMatchingTasksExist_returnsOnlyTasksWithRequestedStatus() {
-        Task task1 = new Task("Task 1", "Test repository");
-        task1.setStatus(TaskStatus.IN_PROGRESS);
-        taskRepository.save(task1);
-
-        Task task2 = new Task("Task 2", "Test repository");
-        task2.setStatus(TaskStatus.IN_PROGRESS);
-        taskRepository.save(task2);
-
-        Task task3 = new Task("Task 3", "Test repository");
-        task3.setStatus(TaskStatus.DONE);
-        taskRepository.save(task3);
+    void findByIdAndOwner_whenTaskBelongsToAnotherUser_returnsEmpty() {
+        User owner = persistUser("owner@example.com");
+        User anotherUser = persistUser("another@example.com");
+        Task task = createTask("Private task", "Owner only", owner);
+        taskRepository.save(task);
 
         entityManager.flush();
         entityManager.clear();
 
-        Page<Task> result = taskRepository.findByStatus(TaskStatus.IN_PROGRESS, PageRequest.of(0, 10));
+        assertTrue(taskRepository.findByIdAndOwner(task.getId(), anotherUser).isEmpty());
+    }
+
+    @Test
+    void findAllByOwner_whenTasksHaveDifferentOwners_returnsOnlyOwnerTasks() {
+        User owner = persistUser("owner@example.com");
+        User anotherUser = persistUser("another@example.com");
+
+        taskRepository.save(createTask("Owner task 1", "Description", owner));
+        taskRepository.save(createTask("Owner task 2", "Description", owner));
+        taskRepository.save(createTask("Another task", "Description", anotherUser));
+
+        entityManager.flush();
+        entityManager.clear();
+
+        Page<Task> result = taskRepository.findAllByOwner(owner, PageRequest.of(0, 10));
+
+        assertEquals(2, result.getTotalElements());
+        assertTrue(result.getContent().stream()
+                .allMatch(task -> task.getOwner().getId().equals(owner.getId())));
+    }
+
+    @Test
+    void findAllByOwnerAndStatus_whenMatchingTasksExist_returnsOnlyOwnerTasksWithRequestedStatus() {
+        User owner = persistUser("owner@example.com");
+        User anotherUser = persistUser("another@example.com");
+
+        Task task1 = createTask("Task 1", "Test repository", owner);
+        task1.setStatus(TaskStatus.IN_PROGRESS);
+        taskRepository.save(task1);
+
+        Task task2 = createTask("Task 2", "Test repository", owner);
+        task2.setStatus(TaskStatus.IN_PROGRESS);
+        taskRepository.save(task2);
+
+        Task task3 = createTask("Task 3", "Test repository", owner);
+        task3.setStatus(TaskStatus.DONE);
+        taskRepository.save(task3);
+
+        Task anotherUserTask = createTask("Another task", "Test repository", anotherUser);
+        anotherUserTask.setStatus(TaskStatus.IN_PROGRESS);
+        taskRepository.save(anotherUserTask);
+
+        entityManager.flush();
+        entityManager.clear();
+
+        Page<Task> result = taskRepository.findAllByOwnerAndStatus(
+                owner,
+                TaskStatus.IN_PROGRESS,
+                PageRequest.of(0, 10)
+        );
 
         assertEquals(2, result.getTotalElements());
         assertEquals(1, result.getTotalPages());
         assertEquals(2, result.getContent().size());
 
         assertTrue(result.getContent().stream().allMatch(task -> task.getStatus().equals(TaskStatus.IN_PROGRESS)));
+        assertTrue(result.getContent().stream().allMatch(task -> task.getOwner().getId().equals(owner.getId())));
     }
 
     @Test
-    void findByStatus_whenSecondPageRequested_returnsCorrectPage() {
+    void findAllByOwnerAndStatus_whenSecondPageRequested_returnsCorrectPage() {
+        User owner = persistUser("owner@example.com");
+
         for (int i = 1; i <= 5; i++) {
-            Task task = new Task("Task " + i, "Test repository");
+            Task task = createTask("Task " + i, "Test repository", owner);
             task.setStatus(TaskStatus.IN_PROGRESS);
             taskRepository.save(task);
         }
@@ -91,7 +140,11 @@ class TaskRepositoryTest {
         entityManager.flush();
         entityManager.clear();
 
-        Page<Task> result = taskRepository.findByStatus(TaskStatus.IN_PROGRESS, PageRequest.of(1, 2));
+        Page<Task> result = taskRepository.findAllByOwnerAndStatus(
+                owner,
+                TaskStatus.IN_PROGRESS,
+                PageRequest.of(1, 2)
+        );
 
         assertEquals(5, result.getTotalElements());
         assertEquals(3, result.getTotalPages());
@@ -105,16 +158,18 @@ class TaskRepositoryTest {
     }
 
     @Test
-    void findByStatus_whenSortedByCreatedAtDesc_returnsNewestFirst() {
-        Task oldestTask = new Task("Oldest task", "Description");
+    void findAllByOwnerAndStatus_whenSortedByCreatedAtDesc_returnsNewestFirst() {
+        User owner = persistUser("owner@example.com");
+
+        Task oldestTask = createTask("Oldest task", "Description", owner);
         oldestTask.setStatus(TaskStatus.IN_PROGRESS);
         oldestTask.setCreatedAt(Instant.parse("2026-01-01T10:00:00Z"));
 
-        Task middleTask = new Task("Middle task", "Description");
+        Task middleTask = createTask("Middle task", "Description", owner);
         middleTask.setStatus(TaskStatus.IN_PROGRESS);
         middleTask.setCreatedAt(Instant.parse("2026-02-01T10:00:00Z"));
 
-        Task newestTask = new Task("Newest task", "Description");
+        Task newestTask = createTask("Newest task", "Description", owner);
         newestTask.setStatus(TaskStatus.IN_PROGRESS);
         newestTask.setCreatedAt(Instant.parse("2026-03-01T10:00:00Z"));
 
@@ -125,8 +180,11 @@ class TaskRepositoryTest {
         entityManager.flush();
         entityManager.clear();
 
-        Page<Task> result = taskRepository.findByStatus(TaskStatus.IN_PROGRESS,
-                PageRequest.of(0, 10, Sort.by("createdAt").descending()));
+        Page<Task> result = taskRepository.findAllByOwnerAndStatus(
+                owner,
+                TaskStatus.IN_PROGRESS,
+                PageRequest.of(0, 10, Sort.by("createdAt").descending())
+        );
 
         assertEquals(3, result.getTotalElements());
         assertEquals(1, result.getTotalPages());
@@ -137,10 +195,14 @@ class TaskRepositoryTest {
     }
 
     @Test
-    void findByStatus_whenNoMatchingTasksExists_returnsEmptyPage() {
-        Task task1 = new Task("Learn JUnit", "Test repository");
+    void findAllByOwnerAndStatus_whenNoMatchingTasksExists_returnsEmptyPage() {
+        User owner = persistUser("owner@example.com");
+        User anotherUser = persistUser("another@example.com");
+
+        Task task1 = createTask("Learn JUnit", "Test repository", owner);
         task1.setStatus(TaskStatus.DONE);
-        Task task2 = new Task("Learn JUnit", "Test repository");
+        Task task2 = createTask("Learn JUnit", "Test repository", anotherUser);
+        task2.setStatus(TaskStatus.IN_PROGRESS);
 
         taskRepository.save(task1);
         taskRepository.save(task2);
@@ -148,11 +210,27 @@ class TaskRepositoryTest {
         entityManager.flush();
         entityManager.clear();
 
-        Page<Task> result = taskRepository.findByStatus(TaskStatus.IN_PROGRESS, PageRequest.of(0, 10));
+        Page<Task> result = taskRepository.findAllByOwnerAndStatus(
+                owner,
+                TaskStatus.IN_PROGRESS,
+                PageRequest.of(0, 10)
+        );
 
         assertEquals(0, result.getTotalElements());
         assertEquals(0, result.getTotalPages());
         assertEquals(0, result.getContent().size());
         assertTrue(result.isEmpty());
+    }
+
+    private User persistUser(String email) {
+        User user = new User(email, "encoded-password");
+        entityManager.persist(user);
+        return user;
+    }
+
+    private Task createTask(String title, String description, User owner) {
+        Task task = new Task(title, description);
+        task.setOwner(owner);
+        return task;
     }
 }

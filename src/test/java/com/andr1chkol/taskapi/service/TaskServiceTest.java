@@ -7,6 +7,8 @@ import com.andr1chkol.taskapi.model.Task;
 import com.andr1chkol.taskapi.model.TaskStatus;
 import com.andr1chkol.taskapi.repository.TaskRepository;
 
+import com.andr1chkol.taskapi.model.User;
+import com.andr1chkol.taskapi.security.CurrentUserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,11 +29,30 @@ import static org.mockito.Mockito.*;
 class TaskServiceTest {
     @Mock
     private TaskRepository taskRepository;
+
     private TaskService taskService;
+
+    @Mock
+    private CurrentUserService currentUserService;
+
+    private User currentUser;
 
     @BeforeEach
     void setUp() {
-        taskService = new TaskService(100, taskRepository);
+        currentUser = new User(
+                "andrew@example.com",
+                "encoded-password"
+        );
+
+        taskService = new TaskService(
+                100,
+                taskRepository,
+                currentUserService
+        );
+
+        lenient()
+                .when(currentUserService.getCurrentUser())
+                .thenReturn(currentUser);
     }
 
     @Test
@@ -39,52 +60,55 @@ class TaskServiceTest {
         Long id = 1L;
         Task task = new Task("Learn JUnit", "Test service");
 
-        when(taskRepository.findById(id)).thenReturn(Optional.of(task));
+        when(taskRepository.findByIdAndOwner(id, currentUser)).thenReturn(Optional.of(task));
 
         Task result = taskService.getTaskById(id);
 
         assertSame(task, result);
-        verify(taskRepository).findById(id);
+
+        verify(currentUserService).getCurrentUser();
+        verify(taskRepository).findByIdAndOwner(id, currentUser);
     }
 
     @Test
     void getTaskById_whenTaskDoesNotExist_throwsTaskNotFoundException() {
         Long id = 999L;
 
-        when(taskRepository.findById(id)).thenReturn(Optional.empty());
+        when(taskRepository.findByIdAndOwner(id, currentUser)).thenReturn(Optional.empty());
 
-        TaskNotFoundException exception = assertThrows(
-                TaskNotFoundException.class,
-                () -> taskService.getTaskById(id));
+        TaskNotFoundException exception = assertThrows(TaskNotFoundException.class, () -> taskService.getTaskById(id));
 
         assertEquals("Task with id " + id + " not found", exception.getMessage());
 
-        verify(taskRepository).findById(id);
+        verify(currentUserService).getCurrentUser();
+        verify(taskRepository).findByIdAndOwner(id, currentUser);
     }
 
     @Test
-    void getAllTasks_whenStatusNull_returnsAllTasks() {
+    void getAllTasks_whenStatusNull_returnsCurrentUserTasks() {
         Sort.Direction direction = Sort.Direction.DESC;
         int page = 0;
         int size = 10;
 
-        Task task = new Task("Learn JUnit", "Test service");
+        Pageable expectedPageable = PageRequest.of(page, size, Sort.by(direction, "createdAt"));
 
+        Task task = new Task("Learn JUnit", "Test service");
         Page<Task> expectedPage = new PageImpl<>(List.of(task));
 
-        when(taskRepository.findAll(any(Pageable.class)))
-                .thenReturn(expectedPage);
+        when(taskRepository.findAllByOwner(currentUser, expectedPageable)).thenReturn(expectedPage);
 
         Page<Task> result = taskService.getAllTasks(null, direction, page, size);
 
         assertSame(expectedPage, result);
 
-        verify(taskRepository).findAll(any(Pageable.class));
-        verify(taskRepository, never()).findByStatus(any(), any(Pageable.class));
+        verify(currentUserService).getCurrentUser();
+        verify(taskRepository).findAllByOwner(currentUser, expectedPageable);
+
+        verify(taskRepository, never()).findAllByOwnerAndStatus(any(User.class), any(TaskStatus.class), any(Pageable.class));
     }
 
     @Test
-    void getAllTasks_whenStatusProvided_returnsTasksWithStatus() {
+    void getAllTasks_whenStatusProvided_returnsCurrentUserTasksWithStatus() {
         TaskStatus status = TaskStatus.IN_PROGRESS;
         Sort.Direction direction = Sort.Direction.DESC;
         int page = 0;
@@ -97,19 +121,20 @@ class TaskServiceTest {
 
         Page<Task> expectedPage = new PageImpl<>(List.of(task));
 
-        when(taskRepository.findByStatus(status, expectedPageable))
-                .thenReturn(expectedPage);
+        when(taskRepository.findAllByOwnerAndStatus(currentUser, status, expectedPageable)).thenReturn(expectedPage);
 
         Page<Task> result = taskService.getAllTasks(status, direction, page, size);
 
         assertSame(expectedPage, result);
 
-        verify(taskRepository).findByStatus(status, expectedPageable);
-        verify(taskRepository, never()).findAll(any(Pageable.class));
+        verify(currentUserService).getCurrentUser();
+        verify(taskRepository).findAllByOwnerAndStatus(currentUser, status, expectedPageable);
+
+        verify(taskRepository, never()).findAllByOwner(any(User.class), any(Pageable.class));
     }
 
     @Test
-    void createTask_whenRequestProvided_savesAndReturnsTask() {
+    void createTask_whenRequestProvided_assignsOwnerAndSavesTask() {
         String title = "Learn JUnit";
         String description = "Test service";
 
@@ -124,11 +149,15 @@ class TaskServiceTest {
         ArgumentCaptor<Task> taskCaptor =
                 ArgumentCaptor.forClass(Task.class);
 
+        verify(currentUserService).getCurrentUser();
         verify(taskRepository).save(taskCaptor.capture());
 
-        assertEquals(title, taskCaptor.getValue().getTitle());
-        assertEquals(description, taskCaptor.getValue().getDescription());
-        assertEquals(TaskStatus.TODO, taskCaptor.getValue().getStatus());
+        Task taskToSave = taskCaptor.getValue();
+
+        assertEquals(title, taskToSave.getTitle());
+        assertEquals(description, taskToSave.getDescription());
+        assertEquals(TaskStatus.TODO, taskToSave.getStatus());
+        assertSame(currentUser, taskToSave.getOwner());
     }
 
     @Test
@@ -141,7 +170,7 @@ class TaskServiceTest {
 
         UpdateTaskRequest request = new UpdateTaskRequest("New title", "New description", TaskStatus.IN_PROGRESS);
 
-        when(taskRepository.findById(id)).thenReturn(Optional.of(task));
+        when(taskRepository.findByIdAndOwner(id, currentUser)).thenReturn(Optional.of(task));
 
         Task result = taskService.updateTask(id, request);
 
@@ -151,7 +180,8 @@ class TaskServiceTest {
         assertEquals(request.getStatus(), result.getStatus());
         assertTrue(result.getUpdatedAt().isAfter(oldUpdatedAt));
 
-        verify(taskRepository).findById(id);
+        verify(currentUserService).getCurrentUser();
+        verify(taskRepository).findByIdAndOwner(id, currentUser);
     }
 
     @Test
@@ -160,7 +190,7 @@ class TaskServiceTest {
 
         UpdateTaskRequest request = new UpdateTaskRequest("New title", "New description", TaskStatus.IN_PROGRESS);
 
-        when(taskRepository.findById(id)).thenReturn(Optional.empty());
+        when(taskRepository.findByIdAndOwner(id, currentUser)).thenReturn(Optional.empty());
 
         TaskNotFoundException exception = assertThrows(
                 TaskNotFoundException.class,
@@ -168,7 +198,8 @@ class TaskServiceTest {
 
         assertEquals("Task with id " + id + " not found", exception.getMessage());
 
-        verify(taskRepository).findById(id);
+        verify(currentUserService).getCurrentUser();
+        verify(taskRepository).findByIdAndOwner(id, currentUser);
     }
 
     @Test
@@ -179,7 +210,7 @@ class TaskServiceTest {
         Instant oldUpdatedAt = Instant.parse("2020-01-01T00:00:00Z");
         task.setUpdatedAt(oldUpdatedAt);
 
-        when(taskRepository.findById(id)).thenReturn(Optional.of(task));
+        when(taskRepository.findByIdAndOwner(id, currentUser)).thenReturn(Optional.of(task));
 
         Task result = taskService.updateTaskStatus(id, TaskStatus.DONE);
 
@@ -187,14 +218,15 @@ class TaskServiceTest {
         assertEquals(TaskStatus.DONE, result.getStatus());
         assertTrue(result.getUpdatedAt().isAfter(oldUpdatedAt));
 
-        verify(taskRepository).findById(id);
+        verify(currentUserService).getCurrentUser();
+        verify(taskRepository).findByIdAndOwner(id, currentUser);
     }
 
     @Test
     void updateTaskStatus_whenTaskDoesNotExist_throwsTaskNotFoundException() {
         Long id = 999L;
 
-        when(taskRepository.findById(id)).thenReturn(Optional.empty());
+        when(taskRepository.findByIdAndOwner(id, currentUser)).thenReturn(Optional.empty());
 
         TaskNotFoundException exception = assertThrows(
                 TaskNotFoundException.class,
@@ -202,7 +234,8 @@ class TaskServiceTest {
 
         assertEquals("Task with id " + id + " not found", exception.getMessage());
 
-        verify(taskRepository).findById(id);
+        verify(currentUserService).getCurrentUser();
+        verify(taskRepository).findByIdAndOwner(id, currentUser);
     }
 
     @Test
@@ -211,11 +244,12 @@ class TaskServiceTest {
 
         Task task = new Task("Learn JUnit", "Test service");
 
-        when(taskRepository.findById(id)).thenReturn(Optional.of(task));
+        when(taskRepository.findByIdAndOwner(id, currentUser)).thenReturn(Optional.of(task));
 
         taskService.deleteTaskById(id);
 
-        verify(taskRepository).findById(id);
+        verify(currentUserService).getCurrentUser();
+        verify(taskRepository).findByIdAndOwner(id, currentUser);
         verify(taskRepository).delete(task);
     }
 
@@ -223,7 +257,7 @@ class TaskServiceTest {
     void deleteTaskById_whenTaskDoesNotExist_throwsTaskNotFoundException() {
         Long id = 999L;
 
-        when(taskRepository.findById(id)).thenReturn(Optional.empty());
+        when(taskRepository.findByIdAndOwner(id, currentUser)).thenReturn(Optional.empty());
 
         TaskNotFoundException exception = assertThrows(
                 TaskNotFoundException.class,
@@ -231,7 +265,8 @@ class TaskServiceTest {
 
         assertEquals("Task with id " + id + " not found", exception.getMessage());
 
-        verify(taskRepository).findById(id);
+        verify(currentUserService).getCurrentUser();
+        verify(taskRepository).findByIdAndOwner(id, currentUser);
         verify(taskRepository, never()).delete(any(Task.class));
     }
 }

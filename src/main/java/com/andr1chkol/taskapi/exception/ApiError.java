@@ -58,10 +58,10 @@ public class ApiError {
     @Schema(
             description = "Validation messages grouped by field name",
             example = """
-                {
-                  "title": "Title must not be blank"
-                }
-                """,
+                    {
+                      "title": "Title must not be blank"
+                    }
+                    """,
             accessMode = Schema.AccessMode.READ_ONLY
     )
     private final Map<String, String> fieldErrors;

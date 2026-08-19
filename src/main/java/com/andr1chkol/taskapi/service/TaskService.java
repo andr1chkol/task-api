@@ -5,8 +5,10 @@ import com.andr1chkol.taskapi.dto.UpdateTaskRequest;
 import com.andr1chkol.taskapi.exception.TaskNotFoundException;
 import com.andr1chkol.taskapi.model.Task;
 import com.andr1chkol.taskapi.model.TaskStatus;
+import com.andr1chkol.taskapi.model.User;
 import com.andr1chkol.taskapi.repository.TaskRepository;
 
+import com.andr1chkol.taskapi.security.CurrentUserService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,21 +28,25 @@ public class TaskService {
     private static final Logger log = LoggerFactory.getLogger(TaskService.class);
     private final TaskRepository taskRepository;
     private final int maxTasks;
+    private final CurrentUserService currentUserService;
 
-    public TaskService(@Value("${task-api.max-tasks:100}") int maxTasks, TaskRepository taskRepository) {
+    public TaskService(@Value("${task-api.max-tasks:100}") int maxTasks, TaskRepository taskRepository, CurrentUserService currentUserService) {
         this.maxTasks = maxTasks;
         this.taskRepository = taskRepository;
+        this.currentUserService = currentUserService;
 
         log.info("Task service initialized with maxTasks={}", maxTasks);
     }
 
     public Page<Task> getAllTasks(TaskStatus status, Sort.Direction direction, int page, int size) {
+        User currentUser = currentUserService.getCurrentUser();
         Pageable pageable = PageRequest.of(page, size, Sort.by(direction, "createdAt"));
         Page<Task> foundTasks;
+
         if (status == null) {
-            foundTasks = taskRepository.findAll(pageable);
+            foundTasks = taskRepository.findAllByOwner(currentUser, pageable);
         } else {
-            foundTasks = taskRepository.findByStatus(status, pageable);
+            foundTasks = taskRepository.findAllByOwnerAndStatus(currentUser, status, pageable);
         }
 
         log.debug("Getting tasks by status={}, current count={}", status, foundTasks.getNumberOfElements());
@@ -49,23 +55,31 @@ public class TaskService {
 
     public Task getTaskById(Long id) {
         log.debug("Getting task with id={}", id);
-        return taskRepository.findById(id)
-                .orElseThrow(() -> new TaskNotFoundException(id));
 
+        User currentUser = currentUserService.getCurrentUser();
+
+        return taskRepository.findByIdAndOwner(id, currentUser)
+                .orElseThrow(() -> new TaskNotFoundException(id));
     }
 
     @Transactional
     public Task createTask(CreateTaskRequest taskRequest) {
+        User currentUser = currentUserService.getCurrentUser();
+
         Task task = new Task(taskRequest.getTitle(), taskRequest.getDescription());
+        task.setOwner(currentUser);
 
         Task savedTask = taskRepository.save(task);
+
         log.info("Task created with id={}", savedTask.getId());
         return savedTask;
     }
 
     @Transactional
     public Task updateTask(Long id, UpdateTaskRequest updateTaskRequest) {
-        Task task = taskRepository.findById(id).orElseThrow(() -> new TaskNotFoundException(id));
+        User currentUser = currentUserService.getCurrentUser();
+
+        Task task = taskRepository.findByIdAndOwner(id, currentUser).orElseThrow(() -> new TaskNotFoundException(id));
 
         task.setTitle(updateTaskRequest.getTitle());
         task.setDescription(updateTaskRequest.getDescription());
@@ -78,7 +92,9 @@ public class TaskService {
 
     @Transactional
     public Task updateTaskStatus(Long id, TaskStatus newStatus) {
-        Task task = taskRepository.findById(id).orElseThrow(() -> new TaskNotFoundException(id));
+        User currentUser = currentUserService.getCurrentUser();
+
+        Task task = taskRepository.findByIdAndOwner(id, currentUser).orElseThrow(() -> new TaskNotFoundException(id));
 
         task.setStatus(newStatus);
         task.setUpdatedAt(Instant.now());
@@ -89,7 +105,8 @@ public class TaskService {
 
     @Transactional
     public void deleteTaskById(Long id) {
-        Task task = taskRepository.findById(id).orElseThrow(() -> new TaskNotFoundException(id));
+        User currentUser = currentUserService.getCurrentUser();
+        Task task = taskRepository.findByIdAndOwner(id, currentUser).orElseThrow(() -> new TaskNotFoundException(id));
         taskRepository.delete(task);
         log.info("Task deleted with id={}", id);
     }
