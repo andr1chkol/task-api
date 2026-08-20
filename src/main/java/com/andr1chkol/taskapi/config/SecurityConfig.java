@@ -34,14 +34,20 @@ public class SecurityConfig {
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
                 .authenticationProvider(authenticationProvider)
-                .authorizeHttpRequests(auth -> auth.requestMatchers("/auth/**",
+                .authorizeHttpRequests(auth -> auth.requestMatchers(
+                                "/auth/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
-                                "/v3/api-docs/**").permitAll()
+                                "/v3/api-docs/**",
+                                "/actuator/health",
+                                "/actuator/info").permitAll()
                         .requestMatchers("/tasks/**").authenticated()
-                        .requestMatchers("/admin/**").hasRole("ADMIN")
+                        .requestMatchers(
+                                "/admin/**",
+                                "/actuator/metrics",
+                                "/actuator/metrics/**").hasRole("ADMIN")
                         .anyRequest().denyAll())
-                .addFilterBefore(
+                        .addFilterBefore(
                         jwtAuthenticationFilter,
                         UsernamePasswordAuthenticationFilter.class
                 )
