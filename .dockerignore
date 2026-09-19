@@ -1,0 +1,13 @@
+.git
+.gitignore
+.idea
+*.iml
+
+target
+logs
+*.log
+
+.env
+.env.*
+
+HELP.md
